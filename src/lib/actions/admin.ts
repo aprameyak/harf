@@ -163,7 +163,7 @@ export async function generateReviewSession() {
         orderBy: [{ priority: "desc" }, { dueAt: "asc" }],
         take: 12,
     });
-    let concepts = due.map((d) => d.concept);
+    const concepts = due.map((d) => d.concept);
     if (concepts.length < 6) {
         const weak = await prisma.userConceptMastery.findMany({
             where: { userId: session.user.id, mastery: { lt: 0.8 } },
