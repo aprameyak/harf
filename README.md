@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Harf (حرف)
 
-## Getting Started
+Learn to **read and decode Arabic script** into Latin-letter sounds.
 
-First, run the development server:
+Not a conversational Arabic course — no audio, no speaking, no translation drills. The product trains one skill: looking at Arabic writing and deriving how it sounds.
+
+## Stack
+
+- Next.js 16 (App Router) + TypeScript
+- Tailwind CSS 4
+- Prisma + SQLite (swap `DATABASE_URL` for PostgreSQL in production)
+- Auth.js / NextAuth v5 (credentials + guest; ready for OAuth later)
+- Framer Motion (respects `prefers-reduced-motion`)
+
+## Quick start
 
 ```bash
+cd harf
+npm install
+npx prisma db push
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Admin:** `admin@harf.app` / `harf1234` → [/admin](http://localhost:3000/admin)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What the MVP includes
 
-## Learn More
+1. Auth (signup, login, guest, password reset)
+2. Short onboarding + optional placement
+3. Structured learning path (Stages 1–4 content + later stage placeholders)
+4. Exercise engine: intro, Arabic↔Latin MC, matching, similar-letter, connected forms, build/type transliteration, find-the-mistake, speed recognition
+5. Modular transliteration engine (`src/lib/transliteration/engine.ts`)
+6. Mastery + spaced review queue
+7. XP, streaks, levels, achievements
+8. Progress alphabet map
+9. Personalized **Review Weak Skills**
+10. Content admin for units / lessons / exercises
 
-To learn more about Next.js, take a look at the following resources:
+## Curriculum data
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Lessons and exercises live in the database (seeded from `prisma/seed.ts`), not hard-coded in React. Edit via `/admin` or re-seed.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Transliteration
 
-## Deploy on Vercel
+All Arabic→Latin mapping and answer validation goes through the engine. Change conventions there without rewriting UI components.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Purpose |
+|---------|---------|
+| `npm run dev` | Dev server |
+| `npm run build` | Production build |
+| `npm run db:seed` | Seed letters + beginner units |
+| `npm run db:reset` | Wipe DB and re-seed |
+| `npx tsx scripts/test-engine.ts` | Transliteration smoke tests |
+
+## PostgreSQL
+
+Set in `.env`:
+
+```
+DATABASE_URL="postgresql://USER:PASS@HOST:5432/harf"
+```
+
+Change `provider` in `prisma/schema.prisma` to `postgresql`, then `npx prisma db push && npm run db:seed`.
+
+## Product north star
+
+A learner who once saw `كَتَبَ` as noise should independently decode **kataba** — then keep decoding harder vowelled Arabic without Latin crutches.

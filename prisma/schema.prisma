@@ -1,0 +1,319 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  passwordHash  String?
+  name          String?
+  image         String?
+  role          String    @default("learner")
+  isGuest       Boolean   @default(false)
+  onboardingDone Boolean  @default(false)
+  readingLevel  String?
+  xp            Int       @default(0)
+  level         Int       @default(1)
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  lastActiveDate String?
+  dailyGoalXp   Int       @default(50)
+  dailyXpEarned Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  lessonProgress    UserLessonProgress[]
+  conceptMastery    UserConceptMastery[]
+  exerciseAttempts  ExerciseAttempt[]
+  reviewQueue       ReviewQueueItem[]
+  achievements      UserAchievement[]
+  analyticsEvents   AnalyticsEvent[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expires   DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  published   Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  units       Unit[]
+}
+
+model Unit {
+  id          String   @id @default(cuid())
+  courseId    String
+  slug        String
+  title       String
+  description String
+  stage       Int
+  order       Int      @default(0)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+
+  @@unique([courseId, slug])
+}
+
+model Lesson {
+  id           String   @id @default(cuid())
+  unitId       String
+  slug         String
+  title        String
+  description  String
+  order        Int      @default(0)
+  xpReward     Int      @default(15)
+  estimatedMin Int      @default(4)
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  unit         Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  exercises    Exercise[]
+  progress     UserLessonProgress[]
+  concepts     LessonConcept[]
+
+  @@unique([unitId, slug])
+}
+
+model Exercise {
+  id              String   @id @default(cuid())
+  lessonId        String
+  type            String
+  promptArabic    String?
+  promptLatin     String?
+  promptText      String?
+  correctAnswers  String
+  distractors     String?
+  tokens          String?
+  options         String?
+  explanation     String?
+  hint            String?
+  difficulty      Int      @default(1)
+  order           Int      @default(0)
+  conceptIds      String
+  metadata        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  attempts        ExerciseAttempt[]
+}
+
+model Concept {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  kind        String
+  title       String
+  arabic      String?
+  latin       String?
+  description String?
+  letterId    String?
+  createdAt   DateTime @default(now())
+  letter      ArabicLetter? @relation(fields: [letterId], references: [id])
+  mastery     UserConceptMastery[]
+  lessons     LessonConcept[]
+  reviewItems ReviewQueueItem[]
+}
+
+model LessonConcept {
+  id        String  @id @default(cuid())
+  lessonId  String
+  conceptId String
+  lesson    Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  concept   Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, conceptId])
+}
+
+model ArabicLetter {
+  id           String   @id @default(cuid())
+  name         String
+  isolated     String
+  initial      String
+  medial       String
+  final        String
+  latin        String
+  latinAlts    String?
+  family       String?
+  familyOrder  Int     @default(0)
+  order        Int     @default(0)
+  difficulty   Int     @default(1)
+  note         String?
+  createdAt    DateTime @default(now())
+  forms        LetterForm[]
+  concepts     Concept[]
+}
+
+model LetterForm {
+  id       String @id @default(cuid())
+  letterId String
+  form     String
+  glyph    String
+  letter   ArabicLetter @relation(fields: [letterId], references: [id], onDelete: Cascade)
+
+  @@unique([letterId, form])
+}
+
+model ReadingRule {
+  id          String @id @default(cuid())
+  key         String @unique
+  title       String
+  description String
+  stage       Int
+  examples    String
+  latinHint   String?
+}
+
+model UserLessonProgress {
+  id              String    @id @default(cuid())
+  userId          String
+  lessonId        String
+  status          String    @default("locked")
+  score           Float?
+  accuracy        Float?
+  xpEarned        Int       @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  attempts        Int       @default(0)
+  perfect         Boolean   @default(false)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson          Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model UserConceptMastery {
+  id             String   @id @default(cuid())
+  userId         String
+  conceptId      String
+  mastery        Float    @default(0)
+  exposures      Int      @default(0)
+  correctCount   Int      @default(0)
+  incorrectCount Int      @default(0)
+  streak         Int      @default(0)
+  lastSeenAt     DateTime?
+  nextReviewAt   DateTime?
+  easeFactor     Float    @default(2.5)
+  intervalDays   Float    @default(0)
+  confusedWith   String?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concept        Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conceptId])
+}
+
+model ExerciseAttempt {
+  id            String   @id @default(cuid())
+  userId        String
+  exerciseId    String
+  correct       Boolean
+  userAnswer    String
+  expectedAnswer String?
+  timeMs        Int?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise      Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+}
+
+model ReviewQueueItem {
+  id         String   @id @default(cuid())
+  userId     String
+  conceptId  String
+  priority   Float    @default(1)
+  reason     String?
+  dueAt      DateTime @default(now())
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concept    Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conceptId])
+}
+
+model Achievement {
+  id          String @id @default(cuid())
+  key         String @unique
+  title       String
+  description String
+  icon        String
+  xpReward    Int    @default(25)
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  event     String
+  payload   String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([event, createdAt])
+  @@index([userId, createdAt])
+}
