@@ -174,9 +174,7 @@ export default async function LearnPage() {
                         </Link>)}
                     </li>);
             })}
-                {unit.lessons.length === 0 && (<li className="rounded-2xl border border-dashed border-black/10 px-4 py-3 text-sm text-ink-muted">
-                    Coming soon
-                  </li>)}
+                {unit.lessons.length === 0 && null}
               </ul>
             </li>))}
         </ol>

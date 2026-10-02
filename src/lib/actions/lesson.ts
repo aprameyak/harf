@@ -224,7 +224,9 @@ export async function requestPasswordReset(email: string) {
     await prisma.passwordResetToken.create({
         data: { userId: user.id, token, expires },
     });
-    console.log(`[password-reset] ${email}: /reset-password?token=${token}`);
+    if (process.env.NODE_ENV === "development") {
+        console.log(`[password-reset] ${email}: /reset-password?token=${token}`);
+    }
     return { ok: true, devToken: process.env.NODE_ENV === "development" ? token : undefined };
 }
 export async function resetPassword(token: string, password: string) {

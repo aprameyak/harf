@@ -9,28 +9,28 @@ Not a conversational Arabic course — no audio, no speaking, no translation dri
 - Next.js 16 (App Router) + TypeScript
 - Tailwind CSS 4
 - Prisma + SQLite (swap `DATABASE_URL` for PostgreSQL in production)
-- Auth.js / NextAuth v5 (credentials + guest; ready for OAuth later)
+- Auth.js / NextAuth v5 (credentials + guest)
 - Framer Motion (respects `prefers-reduced-motion`)
 
 ## Quick start
 
 ```bash
-cd harf
+cp .env.example .env
 npm install
-npx prisma db push
+npm run db:push
 npm run db:seed
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-**Admin:** `admin@harf.app` / `harf1234` → [/admin](http://localhost:3000/admin)
+**Local seed admin:** `admin@harf.app` / `harf1234` → [/admin](http://localhost:3000/admin) (seed credentials only)
 
-## What the MVP includes
+## What’s included
 
 1. Auth (signup, login, guest, password reset)
 2. Short onboarding + optional placement
-3. Structured learning path (Stages 1–4 content + later stage placeholders)
+3. Full 10-stage structured learning path
 4. Exercise engine: intro, Arabic↔Latin MC, matching, similar-letter, connected forms, build/type transliteration, find-the-mistake, speed recognition
 5. Modular transliteration engine (`src/lib/transliteration/engine.ts`)
 6. Mastery + spaced review queue
@@ -53,9 +53,9 @@ All Arabic→Latin mapping and answer validation goes through the engine. Change
 |---------|---------|
 | `npm run dev` | Dev server |
 | `npm run build` | Production build |
-| `npm run db:seed` | Seed letters + beginner units |
+| `npm run db:seed` | Seed letters + curriculum |
 | `npm run db:reset` | Wipe DB and re-seed |
-| `npx tsx scripts/test-engine.ts` | Transliteration smoke tests |
+| `npm run test:engine` | Transliteration smoke tests |
 
 ## PostgreSQL
 
@@ -65,8 +65,8 @@ Set in `.env`:
 DATABASE_URL="postgresql://USER:PASS@HOST:5432/harf"
 ```
 
-Change `provider` in `prisma/schema.prisma` to `postgresql`, then `npx prisma db push && npm run db:seed`.
+Change `provider` in `prisma/schema.prisma` to `postgresql`, then `npm run db:push && npm run db:seed`.
 
-## Product north star
+## License
 
-A learner who once saw `كَتَبَ` as noise should independently decode **kataba** — then keep decoding harder vowelled Arabic without Latin crutches.
+MIT

@@ -2,6 +2,8 @@
   "name": "harf",
   "version": "0.1.0",
   "private": true,
+  "description": "Learn to read Arabic script into Latin sounds",
+  "license": "MIT",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "prisma generate && next build",
