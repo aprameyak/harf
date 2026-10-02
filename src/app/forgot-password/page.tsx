@@ -28,10 +28,7 @@ export default function ForgotPasswordPage() {
             Send reset link
           </button>
         </form>) : (<div className="mt-6 space-y-3 text-ink-muted">
-          <p>If that email exists, a reset token was created.</p>
-          {!devToken && (
-            <p className="text-sm">Email delivery is not configured in this build.</p>
-          )}
+          <p>If that email exists, a reset token was created{devToken ? "" : " (no email sender configured)"}.</p>
           {devToken && (<p className="rounded-xl bg-teal-soft p-3 text-sm text-teal-deep">
               Dev link:{" "}
               <Link className="underline" href={`/reset-password?token=${devToken}`}>
