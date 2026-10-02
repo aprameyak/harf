@@ -1,9 +1,10 @@
 "use server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { applyExerciseResult, completeLesson, trackEvent, ensurePathUnlocked, } from "@/lib/learning";
-import { validateAnswer } from "@/lib/transliteration/engine";
+import { applyExerciseResult, completeLesson, trackEvent, ensurePathUnlocked, assertLessonPlayable, } from "@/lib/learning";
+import { normalizeAnswer, validateAnswer } from "@/lib/transliteration/engine";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 function parseJsonArray(value: string | null | undefined): string[] {
     if (!value)
         return [];
@@ -55,60 +56,136 @@ function gradeExercise(exercise: {
         return ((answer === "wrong" && expectedWrong) ||
             (answer === "right" && !expectedWrong));
     }
-    return accepted.some((a) => a.toLowerCase() === answer.toLowerCase());
+    return accepted.some((a) => normalizeAnswer(a) === normalizeAnswer(answer));
+}
+async function gradeReviewAnswer(userId: string, exerciseId: string, answer: string) {
+    const match = /^review-(.+)-(\d+)$/.exec(exerciseId);
+    if (!match)
+        throw new Error("Invalid review exercise");
+    const conceptId = match[1];
+    const concept = await prisma.concept.findUnique({ where: { id: conceptId } });
+    if (!concept?.latin)
+        throw new Error("Invalid review exercise");
+    const [due, mastery] = await Promise.all([
+        prisma.reviewQueueItem.findUnique({
+            where: { userId_conceptId: { userId, conceptId } },
+        }),
+        prisma.userConceptMastery.findUnique({
+            where: { userId_conceptId: { userId, conceptId } },
+        }),
+    ]);
+    if (!due && !(mastery && mastery.mastery < 0.8)) {
+        throw new Error("Concept not due for review");
+    }
+    const accepted = [concept.latin];
+    const correct = validateAnswer(concept.arabic, answer, accepted).correct;
+    const existing = mastery;
+    const nextMastery = Math.min(1, Math.max(0, (existing?.mastery ?? 0) + (correct ? 0.12 : -0.15)));
+    await prisma.userConceptMastery.upsert({
+        where: { userId_conceptId: { userId, conceptId } },
+        create: {
+            userId,
+            conceptId,
+            mastery: nextMastery,
+            exposures: 1,
+            correctCount: correct ? 1 : 0,
+            incorrectCount: correct ? 0 : 1,
+            lastSeenAt: new Date(),
+            nextReviewAt: new Date(Date.now() + (correct ? 2 : 0.25) * 86400000),
+        },
+        update: {
+            mastery: nextMastery,
+            exposures: { increment: 1 },
+            correctCount: correct ? { increment: 1 } : undefined,
+            incorrectCount: correct ? undefined : { increment: 1 },
+            lastSeenAt: new Date(),
+            nextReviewAt: new Date(Date.now() + (correct ? 2 : 0.25) * 86400000),
+        },
+    });
+    if (correct && nextMastery >= 0.8) {
+        await prisma.reviewQueueItem.deleteMany({ where: { userId, conceptId } });
+    }
+    else {
+        await prisma.reviewQueueItem.upsert({
+            where: { userId_conceptId: { userId, conceptId } },
+            create: {
+                userId,
+                conceptId,
+                priority: correct ? 1 : 3,
+                reason: correct ? "spaced" : "mistake",
+                dueAt: new Date(Date.now() + (correct ? 2 : 0.25) * 86400000),
+            },
+            update: {
+                priority: correct ? 1 : 3,
+                reason: correct ? "spaced" : "mistake",
+                dueAt: new Date(Date.now() + (correct ? 2 : 0.25) * 86400000),
+            },
+        });
+    }
+    await trackEvent(correct ? "exercise_answered" : "exercise_incorrect", userId, {
+        exerciseId,
+        review: true,
+        conceptId,
+    });
+    return { correct };
+}
+async function accuracyFromAttempts(userId: string, lessonId: string) {
+    const [progress, exercises] = await Promise.all([
+        prisma.userLessonProgress.findUnique({
+            where: { userId_lessonId: { userId, lessonId } },
+        }),
+        prisma.exercise.findMany({
+            where: { lessonId },
+            select: { id: true },
+        }),
+    ]);
+    if (exercises.length === 0)
+        return { accuracy: 0, perfect: false };
+    const since = progress?.startedAt ?? new Date(0);
+    const attempts = await prisma.exerciseAttempt.findMany({
+        where: {
+            userId,
+            exerciseId: { in: exercises.map((e) => e.id) },
+            createdAt: { gte: since },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { exerciseId: true, correct: true },
+    });
+    const latest = new Map<string, boolean>();
+    for (const attempt of attempts) {
+        if (!latest.has(attempt.exerciseId))
+            latest.set(attempt.exerciseId, attempt.correct);
+    }
+    if (latest.size === 0)
+        return { accuracy: 0, perfect: false };
+    let correctCount = 0;
+    for (const ok of latest.values()) {
+        if (ok)
+            correctCount += 1;
+    }
+    const accuracy = correctCount / latest.size;
+    const perfect = latest.size >= exercises.length && correctCount === exercises.length;
+    return { accuracy, perfect };
 }
 export async function submitExerciseAnswer(opts: {
     exerciseId: string;
     answer: string;
-    correct?: boolean;
-    conceptIds?: string[];
 }) {
     const session = await auth();
     if (!session?.user?.id)
         throw new Error("Unauthorized");
+    if (typeof opts.answer !== "string")
+        throw new Error("Invalid answer");
     if (opts.exerciseId.startsWith("review-")) {
-        const conceptIds = opts.conceptIds ?? [];
-        const correct = !!opts.correct;
-        for (const conceptId of conceptIds) {
-            const existing = await prisma.userConceptMastery.findUnique({
-                where: {
-                    userId_conceptId: { userId: session.user.id, conceptId },
-                },
-            });
-            const mastery = Math.min(1, Math.max(0, (existing?.mastery ?? 0) + (correct ? 0.12 : -0.15)));
-            await prisma.userConceptMastery.upsert({
-                where: {
-                    userId_conceptId: { userId: session.user.id, conceptId },
-                },
-                create: {
-                    userId: session.user.id,
-                    conceptId,
-                    mastery,
-                    exposures: 1,
-                    correctCount: correct ? 1 : 0,
-                    incorrectCount: correct ? 0 : 1,
-                    lastSeenAt: new Date(),
-                    nextReviewAt: new Date(Date.now() + (correct ? 2 : 0.25) * 86400000),
-                },
-                update: {
-                    mastery,
-                    exposures: { increment: 1 },
-                    correctCount: correct ? { increment: 1 } : undefined,
-                    incorrectCount: correct ? undefined : { increment: 1 },
-                    lastSeenAt: new Date(),
-                    nextReviewAt: new Date(Date.now() + (correct ? 2 : 0.25) * 86400000),
-                },
-            });
-        }
-        await trackEvent(correct ? "exercise_answered" : "exercise_incorrect", session.user.id, {
-            exerciseId: opts.exerciseId,
-            review: true,
-        });
-        return { correct };
+        return gradeReviewAnswer(session.user.id, opts.exerciseId, opts.answer);
     }
     const exercise = await prisma.exercise.findUniqueOrThrow({
         where: { id: opts.exerciseId },
+        include: { lesson: { select: { id: true, published: true } } },
     });
+    if (!exercise.lesson.published)
+        throw new Error("Lesson not available");
+    await assertLessonPlayable(session.user.id, exercise.lesson.id);
     const accepted = parseJsonArray(exercise.correctAnswers);
     const conceptIds = parseJsonArray(exercise.conceptIds);
     const correct = gradeExercise(exercise, opts.answer, accepted);
@@ -124,26 +201,27 @@ export async function submitExerciseAnswer(opts: {
 }
 export async function finishLesson(opts: {
     lessonId: string;
-    accuracy: number;
-    perfect: boolean;
 }) {
     const session = await auth();
     if (!session?.user?.id)
         throw new Error("Unauthorized");
+    await assertLessonPlayable(session.user.id, opts.lessonId);
+    const { accuracy, perfect } = await accuracyFromAttempts(session.user.id, opts.lessonId);
     const result = await completeLesson({
         userId: session.user.id,
         lessonId: opts.lessonId,
-        accuracy: opts.accuracy,
-        perfect: opts.perfect,
+        accuracy,
+        perfect,
     });
     revalidatePath("/learn");
     revalidatePath("/progress");
-    return result;
+    return { ...result, accuracy, perfect };
 }
 export async function startLesson(lessonId: string) {
     const session = await auth();
     if (!session?.user?.id)
         throw new Error("Unauthorized");
+    await assertLessonPlayable(session.user.id, lessonId);
     await prisma.userLessonProgress.upsert({
         where: {
             userId_lessonId: { userId: session.user.id, lessonId },
@@ -165,17 +243,18 @@ export async function completeOnboarding(readingLevel: string) {
     const session = await auth();
     if (!session?.user?.id)
         throw new Error("Unauthorized");
+    const level = z.enum(["none", "some", "slow"]).parse(readingLevel);
     await prisma.user.update({
         where: { id: session.user.id },
         data: {
             onboardingDone: true,
-            readingLevel,
+            readingLevel: level,
         },
     });
     await ensurePathUnlocked(session.user.id);
-    if (readingLevel === "some" || readingLevel === "slow") {
+    if (level === "some" || level === "slow") {
         const lessons = await prisma.lesson.findMany({
-            where: { published: true, unit: { stage: { lte: readingLevel === "slow" ? 3 : 2 } } },
+            where: { published: true, unit: { stage: { lte: level === "slow" ? 3 : 2 } } },
             orderBy: [{ unit: { order: "asc" } }, { order: "asc" }],
         });
         for (const lesson of lessons) {
@@ -194,7 +273,7 @@ export async function completeOnboarding(readingLevel: string) {
                 update: {},
             });
         }
-        if (readingLevel === "slow") {
+        if (level === "slow") {
             const early = await prisma.lesson.findMany({
                 where: { published: true, unit: { stage: 1 } },
             });
@@ -221,22 +300,28 @@ export async function completeOnboarding(readingLevel: string) {
     revalidatePath("/learn");
     revalidatePath("/onboarding");
 }
+const credentialsSchema = z.object({
+    email: z.string().email().max(254),
+    password: z.string().min(6).max(128),
+    name: z.string().max(80).optional(),
+});
 export async function registerUser(opts: {
     email: string;
     password: string;
     name?: string;
 }) {
+    const parsed = credentialsSchema.parse(opts);
     const { hash } = await import("bcryptjs");
-    const email = opts.email.toLowerCase().trim();
+    const email = parsed.email.toLowerCase().trim();
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing)
         throw new Error("Email already registered");
-    const passwordHash = await hash(opts.password, 10);
+    const passwordHash = await hash(parsed.password, 10);
     const user = await prisma.user.create({
         data: {
             email,
             passwordHash,
-            name: opts.name?.trim() || email.split("@")[0],
+            name: parsed.name?.trim() || email.split("@")[0],
             onboardingDone: false,
         },
     });
@@ -244,8 +329,12 @@ export async function registerUser(opts: {
     return { id: user.id, email: user.email };
 }
 export async function requestPasswordReset(email: string) {
+    const parsed = z.string().email().max(254).safeParse(email);
+    if (!parsed.success)
+        return { ok: true };
+    const normalized = parsed.data.toLowerCase().trim();
     const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase().trim() },
+        where: { email: normalized },
     });
     if (!user)
         return { ok: true };
@@ -255,17 +344,18 @@ export async function requestPasswordReset(email: string) {
         data: { userId: user.id, token, expires },
     });
     if (process.env.NODE_ENV === "development") {
-        console.log(`[password-reset] ${email}: /reset-password?token=${token}`);
+        console.log(`[password-reset] ${normalized}: /reset-password?token=${token}`);
     }
     return { ok: true, devToken: process.env.NODE_ENV === "development" ? token : undefined };
 }
 export async function resetPassword(token: string, password: string) {
     const { hash } = await import("bcryptjs");
+    const safePassword = z.string().min(6).max(128).parse(password);
     const row = await prisma.passwordResetToken.findUnique({ where: { token } });
     if (!row || row.used || row.expires < new Date()) {
         throw new Error("Invalid or expired token");
     }
-    const passwordHash = await hash(password, 10);
+    const passwordHash = await hash(safePassword, 10);
     await prisma.user.update({
         where: { id: row.userId },
         data: { passwordHash },

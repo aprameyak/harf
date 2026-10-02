@@ -4,6 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import type { ExerciseDTO } from "@/components/exercises/ExerciseRenderer";
 import { startLesson } from "@/lib/actions/lesson";
+import { assertLessonPlayable } from "@/lib/learning";
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
     if (!value)
         return fallback;
@@ -30,8 +31,14 @@ export default async function LessonPage({ params, }: {
             unit: true,
         },
     });
-    if (!lesson || !lesson.published)
+    if (!lesson || !lesson.published || !lesson.unit.published)
         notFound();
+    try {
+        await assertLessonPlayable(session.user.id, lesson.id);
+    }
+    catch {
+        redirect("/learn");
+    }
     await startLesson(lesson.id);
     const exercises: ExerciseDTO[] = lesson.exercises.map((ex) => ({
         id: ex.id,

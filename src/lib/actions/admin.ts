@@ -1,7 +1,7 @@
 "use server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { trackEvent } from "@/lib/learning";
+import { awardXp, trackEvent } from "@/lib/learning";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 async function requireAdmin() {
@@ -107,7 +107,6 @@ export async function adminUpsertExercise(data: {
     difficulty: number;
     order: number;
     conceptIds: string;
-    publishedPreview?: boolean;
 }) {
     await requireAdmin();
     for (const field of ["correctAnswers", "distractors", "tokens", "options", "conceptIds"] as const) {
@@ -139,12 +138,6 @@ export async function adminUpsertExercise(data: {
         await prisma.exercise.create({ data: payload });
     }
     revalidatePath("/admin");
-}
-export async function adminReorderLessons(unitId: string, lessonIds: string[]) {
-    await requireAdmin();
-    await Promise.all(lessonIds.map((id, order) => prisma.lesson.update({ where: { id }, data: { order } })));
-    revalidatePath("/admin");
-    revalidatePath("/learn");
 }
 export async function adminToggleLessonPublish(lessonId: string, published: boolean) {
     await requireAdmin();
@@ -205,7 +198,20 @@ export async function completeReview() {
     const session = await auth();
     if (!session?.user?.id)
         throw new Error("Unauthorized");
-    await trackEvent("review_completed", session.user.id);
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const answered = await prisma.analyticsEvent.count({
+        where: {
+            userId: session.user.id,
+            createdAt: { gte: since },
+            event: { in: ["exercise_answered", "exercise_incorrect"] },
+            payload: { contains: '"review":true' },
+        },
+    });
+    const xp = answered > 0 ? 10 : 0;
+    if (xp > 0)
+        await awardXp(session.user.id, xp);
+    await trackEvent("review_completed", session.user.id, { xp, answered });
     revalidatePath("/learn");
     revalidatePath("/progress");
+    return { xp };
 }

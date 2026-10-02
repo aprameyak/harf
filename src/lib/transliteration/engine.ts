@@ -323,13 +323,6 @@ export const LETTERS: LetterMapping[] = [
     },
 ];
 const byIsolated = new Map(LETTERS.map((l) => [l.isolated, l]));
-const byName = new Map(LETTERS.map((l) => [l.name, l]));
-export function getLetter(nameOrChar: string): LetterMapping | undefined {
-    return byName.get(nameOrChar) ?? byIsolated.get(nameOrChar);
-}
-export function latinForLetter(char: string): string | undefined {
-    return byIsolated.get(char)?.latin;
-}
 export function normalizeAnswer(input: string): string {
     return input
         .trim()
@@ -568,13 +561,3 @@ export function syllable(consonant: string, vowelMark: string): {
         latin: simplifyLatin(letter.latin) + v,
     };
 }
-export function diacriticLatin(mark: string): string | undefined {
-    return SHORT_VOWELS[mark] ?? TANWEEN[mark];
-}
-export const DIACRITIC_INFO = [
-    { char: "َ", name: "fatha", latin: "a", description: "Short 'a' sound above the letter." },
-    { char: "ِ", name: "kasra", latin: "i", description: "Short 'i' sound below the letter." },
-    { char: "ُ", name: "damma", latin: "u", description: "Short 'u' sound above the letter." },
-    { char: "ْ", name: "sukun", latin: "", description: "No vowel — the consonant stands alone." },
-    { char: "ّ", name: "shadda", latin: "(double)", description: "Double the consonant sound." },
-] as const;

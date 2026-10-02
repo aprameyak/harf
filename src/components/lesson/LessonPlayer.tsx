@@ -37,17 +37,13 @@ export function LessonPlayer({ lessonId, title, exercises, }: {
             const graded = await submitExerciseAnswer({
                 exerciseId: exercise.id,
                 answer: result.answer,
-                correct: result.correct,
-                conceptIds: exercise.conceptIds,
             });
             setLastCorrect(graded.correct);
             if (graded.correct)
                 setCorrectCount((c) => c + 1);
         }
         catch {
-            setLastCorrect(result.correct);
-            if (result.correct)
-                setCorrectCount((c) => c + 1);
+            setLastCorrect(false);
         }
     }, [exercise, waiting]);
     const continueLesson = async () => {
@@ -60,32 +56,28 @@ export function LessonPlayer({ lessonId, title, exercises, }: {
             return;
         }
         setBusy(true);
-        const accuracy = answered === 0 ? 1 : correctCount / answered;
+        const displayAccuracy = answered === 0 ? 0 : correctCount / answered;
         const isReview = lessonId === "review-session";
         try {
             if (isReview) {
-                await completeReview();
+                const res = await completeReview();
                 setFinished({
-                    xp: Math.round(10 + accuracy * 15),
-                    accuracy,
-                    perfect: accuracy === 1,
+                    xp: res.xp,
+                    accuracy: displayAccuracy,
+                    perfect: answered > 0 && correctCount === answered,
                 });
             }
             else {
-                const res = await finishLesson({
-                    lessonId,
-                    accuracy,
-                    perfect: accuracy === 1,
-                });
+                const res = await finishLesson({ lessonId });
                 setFinished({
                     xp: res.xp,
-                    accuracy,
-                    perfect: accuracy === 1,
+                    accuracy: res.accuracy,
+                    perfect: res.perfect,
                 });
             }
         }
         catch {
-            setFinished({ xp: 15, accuracy, perfect: accuracy === 1 });
+            setFinished({ xp: 0, accuracy: displayAccuracy, perfect: false });
         }
         finally {
             setBusy(false);

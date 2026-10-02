@@ -370,14 +370,18 @@ function FindMistakeExercise({ exercise, onResult, }: {
     onResult: (r: ResultPayload) => void;
 }) {
     const [revealed, setRevealed] = useState(false);
+    const [userCorrect, setUserCorrect] = useState(false);
+    const [picked, setPicked] = useState<"right" | "wrong" | null>(null);
     const correction = (exercise.metadata?.correction as string) ?? exercise.correctAnswers[0];
+    const expectedWrong = exercise.correctAnswers.includes("wrong");
     const answer = (verdict: "right" | "wrong") => {
         if (revealed)
             return;
-        setRevealed(true);
-        const expectedWrong = exercise.correctAnswers.includes("wrong");
         const correct = (verdict === "wrong" && expectedWrong) ||
             (verdict === "right" && !expectedWrong);
+        setPicked(verdict);
+        setUserCorrect(correct);
+        setRevealed(true);
         onResult({ correct, answer: verdict });
     };
     return (<div className="flex flex-col gap-6 text-center">
@@ -390,21 +394,17 @@ function FindMistakeExercise({ exercise, onResult, }: {
       </p>
       <div className="grid grid-cols-2 gap-3">
         <ChoiceButton onClick={() => answer("right")} disabled={revealed} state={revealed
-            ? !exercise.correctAnswers.includes("wrong")
-                ? "correct"
-                : "incorrect"
+            ? (!expectedWrong ? "correct" : picked === "right" ? "incorrect" : "idle")
             : "idle"}>
           Looks right
         </ChoiceButton>
         <ChoiceButton onClick={() => answer("wrong")} disabled={revealed} state={revealed
-            ? exercise.correctAnswers.includes("wrong")
-                ? "correct"
-                : "incorrect"
+            ? (expectedWrong ? "correct" : picked === "wrong" ? "incorrect" : "idle")
             : "idle"}>
           Something&apos;s off
         </ChoiceButton>
       </div>
-      {revealed && (<FeedbackBanner correct={exercise.correctAnswers.includes("wrong")} explanation={exercise.explanation ??
+      {revealed && (<FeedbackBanner correct={userCorrect} explanation={exercise.explanation ??
                 (correction ? `It should be: ${correction}` : undefined)}/>)}
     </div>);
 }

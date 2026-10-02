@@ -319,6 +319,33 @@ export async function ensurePathUnlocked(userId: string) {
         update: {},
     });
 }
+export async function assertLessonPlayable(userId: string, lessonId: string) {
+    const lesson = await prisma.lesson.findUnique({
+        where: { id: lessonId },
+        include: { unit: true },
+    });
+    if (!lesson || !lesson.published || !lesson.unit.published) {
+        throw new Error("Lesson not available");
+    }
+    const progress = await prisma.userLessonProgress.findUnique({
+        where: { userId_lessonId: { userId, lessonId } },
+    });
+    if (progress &&
+        (progress.status === "available" ||
+            progress.status === "in_progress" ||
+            progress.status === "completed")) {
+        return;
+    }
+    const firstLesson = await prisma.lesson.findFirst({
+        where: { published: true, unit: { published: true } },
+        orderBy: [{ unit: { order: "asc" } }, { order: "asc" }],
+    });
+    if (firstLesson?.id === lessonId) {
+        await ensurePathUnlocked(userId);
+        return;
+    }
+    throw new Error("Lesson locked");
+}
 export async function getReviewDueCount(userId: string) {
     return prisma.reviewQueueItem.count({
         where: { userId, dueAt: { lte: new Date() } },

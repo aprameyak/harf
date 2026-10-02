@@ -43,17 +43,17 @@ export default async function LearnPage() {
     } | null = null;
     if (course) {
         for (const unit of course.units) {
-            for (const lesson of unit.lessons) {
+            for (const [lessonIndex, lesson] of unit.lessons.entries()) {
                 const p = progressMap.get(lesson.id);
-                if (!p || p.status === "available" || p.status === "in_progress") {
+                const isFirst = unit.order === 0 && lessonIndex === 0;
+                const status = p?.status ?? (isFirst ? "available" : "locked");
+                if (status === "available" || status === "in_progress") {
                     continueLesson = {
                         id: lesson.id,
                         title: lesson.title,
                         unitTitle: unit.title,
                     };
                     break;
-                }
-                if (p.status === "locked" || !p) {
                 }
             }
             if (continueLesson)
