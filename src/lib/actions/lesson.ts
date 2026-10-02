@@ -14,6 +14,49 @@ function parseJsonArray(value: string | null | undefined): string[] {
         return [];
     }
 }
+function gradeMatchingAnswer(answer: string, accepted: string[]): boolean {
+    try {
+        const pairs = JSON.parse(answer) as Record<string, string>;
+        if (!pairs || typeof pairs !== "object" || Array.isArray(pairs))
+            return false;
+        const expected = new Map<string, string>();
+        for (const item of accepted) {
+            const eq = item.indexOf("=");
+            if (eq <= 0)
+                return false;
+            expected.set(item.slice(0, eq), item.slice(eq + 1));
+        }
+        if (expected.size === 0 || Object.keys(pairs).length !== expected.size)
+            return false;
+        for (const [ar, la] of expected) {
+            if (pairs[ar] !== la)
+                return false;
+        }
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function gradeExercise(exercise: {
+    type: string;
+    promptArabic: string | null;
+}, answer: string, accepted: string[]): boolean {
+    if (exercise.type === "intro")
+        return true;
+    if (exercise.type === "matching")
+        return gradeMatchingAnswer(answer, accepted);
+    if (exercise.type === "type_transliteration" ||
+        exercise.type === "build_transliteration") {
+        return validateAnswer(exercise.promptArabic, answer, accepted).correct;
+    }
+    if (exercise.type === "find_mistake") {
+        const expectedWrong = accepted.includes("wrong");
+        return ((answer === "wrong" && expectedWrong) ||
+            (answer === "right" && !expectedWrong));
+    }
+    return accepted.some((a) => a.toLowerCase() === answer.toLowerCase());
+}
 export async function submitExerciseAnswer(opts: {
     exerciseId: string;
     answer: string;
@@ -68,28 +111,16 @@ export async function submitExerciseAnswer(opts: {
     });
     const accepted = parseJsonArray(exercise.correctAnswers);
     const conceptIds = parseJsonArray(exercise.conceptIds);
-    let correct = opts.correct;
-    if (correct === undefined) {
-        if (exercise.type === "type_transliteration" ||
-            exercise.type === "build_transliteration") {
-            correct = validateAnswer(exercise.promptArabic, opts.answer, accepted).correct;
-        }
-        else if (exercise.type === "intro") {
-            correct = true;
-        }
-        else {
-            correct = accepted.some((a) => a.toLowerCase() === opts.answer.toLowerCase());
-        }
-    }
+    const correct = gradeExercise(exercise, opts.answer, accepted);
     await applyExerciseResult({
         userId: session.user.id,
         exerciseId: exercise.id,
         conceptIds,
-        correct: !!correct,
+        correct,
         userAnswer: opts.answer,
         expectedAnswer: accepted[0],
     });
-    return { correct: !!correct };
+    return { correct };
 }
 export async function finishLesson(opts: {
     lessonId: string;
@@ -107,7 +138,6 @@ export async function finishLesson(opts: {
     });
     revalidatePath("/learn");
     revalidatePath("/progress");
-    revalidatePath("/dashboard");
     return result;
 }
 export async function startLesson(lessonId: string) {
@@ -159,7 +189,7 @@ export async function completeOnboarding(readingLevel: string) {
                 create: {
                     userId: session.user.id,
                     lessonId: lesson.id,
-                    status: lesson.unitId ? "available" : "available",
+                    status: "available",
                 },
                 update: {},
             });

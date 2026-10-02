@@ -68,6 +68,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: "Guest",
             credentials: {},
             async authorize() {
+                const recentGuests = await prisma.user.count({
+                    where: {
+                        isGuest: true,
+                        createdAt: { gte: new Date(Date.now() - 60_000) },
+                    },
+                });
+                if (recentGuests >= 30)
+                    return null;
+                const staleBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                await prisma.user.deleteMany({
+                    where: {
+                        isGuest: true,
+                        createdAt: { lt: staleBefore },
+                        lessonProgress: { none: {} },
+                    },
+                });
                 const guest = await prisma.user.create({
                     data: {
                         name: "Guest",

@@ -28,16 +28,3 @@ export function masteryLabel(score: number): "not_learned" | "learning" | "stron
         return "strong";
     return "mastered";
 }
-export function masteryColor(score: number): string {
-    const label = masteryLabel(score);
-    switch (label) {
-        case "not_learned":
-            return "bg-stone-200 text-stone-500";
-        case "learning":
-            return "bg-amber-100 text-amber-800 ring-1 ring-amber-300";
-        case "strong":
-            return "bg-teal-100 text-teal-800 ring-1 ring-teal-300";
-        case "mastered":
-            return "bg-teal-600 text-white";
-    }
-}

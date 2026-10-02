@@ -210,16 +210,6 @@ model LetterForm {
   @@unique([letterId, form])
 }
 
-model ReadingRule {
-  id          String @id @default(cuid())
-  key         String @unique
-  title       String
-  description String
-  stage       Int
-  examples    String
-  latinHint   String?
-}
-
 model UserLessonProgress {
   id              String    @id @default(cuid())
   userId          String

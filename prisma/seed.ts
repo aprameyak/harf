@@ -78,7 +78,6 @@ async function main() {
   await prisma.letterForm.deleteMany();
   await prisma.concept.deleteMany();
   await prisma.arabicLetter.deleteMany();
-  await prisma.readingRule.deleteMany();
   await prisma.achievement.deleteMany();
 
   const letterRecords = [];
@@ -168,74 +167,13 @@ async function main() {
     conceptMap.set(d.key, c.id);
   }
 
-  await prisma.readingRule.createMany({
-    data: [
-      {
-        key: "short_vowels",
-        title: "Short vowels",
-        description: "Marks above/below letters give short a, i, or u.",
-        stage: 4,
-        examples: JSON.stringify([
-          { ar: "بَ", la: "ba" },
-          { ar: "بِ", la: "bi" },
-          { ar: "بُ", la: "bu" },
-        ]),
-      },
-      {
-        key: "connected_forms",
-        title: "Connected forms",
-        description: "Most letters change shape at the start, middle, or end of a word.",
-        stage: 3,
-        examples: JSON.stringify([
-          { ar: "ب", la: "b (isolated)" },
-          { ar: "بـ", la: "b (initial)" },
-        ]),
-      },
-      {
-        key: "sukun_shadda",
-        title: "Sukun and shadda",
-        description: "Sukun = no vowel. Shadda = doubled consonant.",
-        stage: 5,
-        examples: JSON.stringify([
-          { ar: "مِنْ", la: "min" },
-          { ar: "كَتَّ", la: "katta" },
-        ]),
-      },
-      {
-        key: "long_vowels",
-        title: "Long vowels",
-        description: "ا و ي can lengthen preceding short vowels.",
-        stage: 6,
-        examples: JSON.stringify([
-          { ar: "بَا", la: "baa" },
-          { ar: "بُو", la: "buu" },
-          { ar: "بِي", la: "bii" },
-        ]),
-      },
-      {
-        key: "definite_article",
-        title: "Definite article",
-        description: "ال reads as al-, or assimilates before sun letters.",
-        stage: 8,
-        examples: JSON.stringify([
-          { ar: "الْكِتَاب", la: "alkitaab" },
-          { ar: "الشَّمْس", la: "ash-shams" },
-        ]),
-      },
-    ],
-  });
-
   await prisma.achievement.createMany({
     data: [
       { key: "first_letter", title: "First Letter", description: "Learned your first Arabic letter.", icon: "sparkles", xpReward: 20 },
       { key: "ten_letters", title: "10 Letters Mastered", description: "Mastered 10 Arabic letters.", icon: "award", xpReward: 50 },
       { key: "alphabet_master", title: "Alphabet Mastered", description: "Mastered the full Arabic alphabet.", icon: "trophy", xpReward: 200 },
-      { key: "hundred_words", title: "100 Words Decoded", description: "Decoded 100 Arabic words.", icon: "book", xpReward: 75 },
       { key: "streak_7", title: "7-Day Streak", description: "Practiced 7 days in a row.", icon: "flame", xpReward: 40 },
       { key: "perfect_lesson", title: "Perfect Lesson", description: "Completed a lesson with no mistakes.", icon: "star", xpReward: 30 },
-      { key: "connected_master", title: "Connected Letters Mastered", description: "Mastered connected letter forms.", icon: "link", xpReward: 60 },
-      { key: "long_vowel_master", title: "Long Vowel Reader", description: "Finished the long vowels unit.", icon: "stretch", xpReward: 40 },
-      { key: "challenge_finisher", title: "Reading Challenger", description: "Completed a reading challenge lesson.", icon: "flag", xpReward: 80 },
     ],
   });
 

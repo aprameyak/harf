@@ -32,19 +32,22 @@ export function LessonPlayer({ lessonId, title, exercises, }: {
         if (!exercise || waiting)
             return;
         setWaiting(true);
-        setLastCorrect(result.correct);
         setAnswered((a) => a + 1);
-        if (result.correct)
-            setCorrectCount((c) => c + 1);
         try {
-            await submitExerciseAnswer({
+            const graded = await submitExerciseAnswer({
                 exerciseId: exercise.id,
                 answer: result.answer,
                 correct: result.correct,
                 conceptIds: exercise.conceptIds,
             });
+            setLastCorrect(graded.correct);
+            if (graded.correct)
+                setCorrectCount((c) => c + 1);
         }
         catch {
+            setLastCorrect(result.correct);
+            if (result.correct)
+                setCorrectCount((c) => c + 1);
         }
     }, [exercise, waiting]);
     const continueLesson = async () => {
