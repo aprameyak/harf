@@ -174,7 +174,6 @@ export default async function LearnPage() {
                         </Link>)}
                     </li>);
             })}
-                {unit.lessons.length === 0 && null}
               </ul>
             </li>))}
         </ol>
